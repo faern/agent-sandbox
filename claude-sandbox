@@ -34,7 +34,7 @@ readonly COLOR_RESET="\033[0m"
 
 readonly GLOBAL_CONFIG_DIR="$HOME/.config/claude-sandbox"
 
-# Project Containerfile preamble: replaces default preamble (must include FROM).
+# Project Containerfile: replaces default containerfile (must include FROM).
 # Project overrides global (no concatenation).
 readonly PROJECT_CONTAINERFILE="$PWD/.claude-sandbox.containerfile"
 readonly GLOBAL_CONTAINERFILE="$GLOBAL_CONFIG_DIR/.claude-sandbox.containerfile"
@@ -62,7 +62,7 @@ Options:
                 host:    Mount host claude binary into container (read-only)
                 install: Install claude into container during image build.
                 none:    Don't provide claude at all. You are expected to
-                         install it via a container preamble
+                         install it via the containerfile
   --cap-add CAP Add a Linux capability (repeatable)
   -h, --help    Show this help
 
@@ -74,20 +74,21 @@ Configuration:
   overrides global). Project configs are trust-gated — you'll be prompted
   before they take effect.
 
-  .claude-sandbox.containerfile Replaces the default container preamble. Must
-                                include a FROM line and install any needed tools.
-                                Example (Fedora):
-                                  FROM fedora:42
-                                  RUN dnf install -y git curl ripgrep fd-find jq
-                                Without this file, the default preamble uses
-                                Ubuntu 24.04 with git, curl, ripgrep, fd-find,
-                                jq, build-essential, and sudo pre-installed.
+  .claude-sandbox.containerfile Custom containerfile. Must include a FROM line.
+                                claude-sandbox splits it at the first FROM and
+                                injects user creation + ARGs (USERNAME, USER_HOME,
+                                USER_UID, USER_GID) right after FROM. Your
+                                commands can use USER ${USERNAME} to run as the
+                                sandbox user. After your file, sudo setup, PATH
+                                config, and optional claude install are appended.
+                                Without this file, Ubuntu 24.04 with git, curl,
+                                ripgrep, fd-find, jq, build-essential, and sudo.
 
   Images are tagged by config hash — different configs build separate images.
   Rebuild triggers automatically when configs change, or force with --rebuild.
 
 Environment variables:
-  SANDBOX_CONTAINERFILE         Override containerfile preamble path (must exist, skips discovery)
+  SANDBOX_CONTAINERFILE         Override containerfile path (must exist, skips discovery)
 EOF
     exit 0
 }
@@ -145,7 +146,7 @@ ensure_config_trusted() {
         return 0
     fi
 
-    echo "Untrusted Containerfile (preamble: $SANDBOX_CONTAINERFILE)" >&2
+    echo "Untrusted Containerfile (source: $SANDBOX_CONTAINERFILE)" >&2
     echo "---" >&2
     echo -ne "${COLOR_DEEMPHASIZE}" >&2
     echo "$content" >&2
@@ -180,7 +181,7 @@ needs_rebuild() {
     return 1
 }
 
-# Generate a Containerfile from project containerfile preamble (or default) + distro-agnostic suffix.
+# Generate a Containerfile from project containerfile (or default) + sandbox suffix.
 generate_containerfile() {
     local username
     username=$(whoami)
@@ -190,28 +191,50 @@ generate_containerfile() {
     user_gid=$(id -g)
     local user_home="$HOME"
 
-    cat <<ARGS_EOF
-# First define user arguments, so that the project provided preamble can use it
-# NOTE: ARGs defined before the FROM instructions must be re-declared after the FROM
-# instruction. To use these in a project preamble re-declare the ones you need
-# like, the following (no value specified):
-# ARG USER_HOME
+    # Injected right after the first FROM line: ARG declarations + user creation.
+    # Placing ARGs after FROM makes them available to preamble commands directly
+    # (pre-FROM ARGs are only usable in FROM instructions themselves).
+    local post_from_block
+    post_from_block=$(cat <<POSTFROM_EOF
 
 ARG USERNAME=${username}
 ARG USER_HOME=${user_home}
 ARG USER_UID=${user_uid}
 ARG USER_GID=${user_gid}
 
-ARGS_EOF
+# Create user matching host UID/GID
+RUN existing_user=\$(awk -F: '\$3 == "${user_uid}" {print \$1}' /etc/passwd) \\
+    && [ -n "\$existing_user" ] && userdel -r "\$existing_user" 2>/dev/null || true \\
+    ; existing_group=\$(awk -F: '\$3 == "${user_gid}" {print \$1}' /etc/group) \\
+    && [ -n "\$existing_group" ] && groupdel "\$existing_group" 2>/dev/null || true \\
+    ; groupadd --gid ${user_gid} ${username} \\
+    && useradd --uid ${user_uid} --gid ${user_gid} --home-dir ${user_home} -m ${username}
+POSTFROM_EOF
+    )
 
-    # --- Preamble: project-provided or default ---
+    # --- Project-provided or default containerfile ---
     if [[ -n "$SANDBOX_CONTAINERFILE" ]]; then
-        echo "# === PROJECT PREAMBLE START ==="
-        cat "$SANDBOX_CONTAINERFILE"
+        local preamble
+        preamble=$(cat "$SANDBOX_CONTAINERFILE")
+        # Split at first FROM line: output everything up to and including it,
+        # inject user creation, then output the rest.
+        local from_line
+        from_line=$(echo "$preamble" | awk '/^[Ff][Rr][Oo][Mm] /{print NR; exit}')
+        if [[ -z "$from_line" ]]; then
+            echo "Error: containerfile has no FROM line: $SANDBOX_CONTAINERFILE" >&2
+            return 1
+        fi
+        echo "$preamble" | head -n "$from_line"
+        echo "$post_from_block"
+        local total_lines
+        total_lines=$(echo "$preamble" | wc -l)
+        if [[ "$from_line" -lt "$total_lines" ]]; then
+            echo "$preamble" | tail -n +$((from_line + 1))
+        fi
     else
+        echo "FROM ubuntu:24.04"
+        echo "$post_from_block"
         cat <<'PREAMBLE_EOF'
-# === DEFAULT PREAMBLE START ===
-FROM ubuntu:24.04
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -222,15 +245,9 @@ PREAMBLE_EOF
 
     # --- Always appended (distro-agnostic) ---
     cat <<SUFFIX_EOF
-# === PREAMBLE END ===
 
-# Create user matching host UID/GID
-RUN existing_user=\$(awk -F: '\$3 == "${user_uid}" {print \$1}' /etc/passwd) \\
-    && [ -n "\$existing_user" ] && userdel -r "\$existing_user" 2>/dev/null || true \\
-    ; existing_group=\$(awk -F: '\$3 == "${user_gid}" {print \$1}' /etc/group) \\
-    && [ -n "\$existing_group" ] && groupdel "\$existing_group" 2>/dev/null || true \\
-    ; groupadd --gid ${user_gid} ${username} \\
-    && useradd --uid ${user_uid} --gid ${user_gid} --home-dir ${user_home} -m ${username}
+# Reset to root (containerfile may have switched USER)
+USER root
 
 # Grant passwordless sudo if sudo is installed
 RUN if command -v sudo >/dev/null 2>&1; then \\
@@ -329,7 +346,7 @@ if [[ $OPT_CLEANUP -eq 1 ]]; then
     exit 0
 fi
 
-# --- Project containerfile preamble discovery ---
+# --- Project containerfile discovery ---
 # SANDBOX_CONTAINERFILE env override takes precedence (must exist).
 # Otherwise: project overrides global, no concatenation.
 if [[ -n "${SANDBOX_CONTAINERFILE:-}" ]]; then
@@ -346,7 +363,7 @@ elif [[ -f "$GLOBAL_CONTAINERFILE" ]]; then
     verbose "Project containerfile: $GLOBAL_CONTAINERFILE (global)"
 else
     SANDBOX_CONTAINERFILE=""
-    verbose "No project containerfile, using default Ubuntu preamble"
+    verbose "No project containerfile, using default Ubuntu base"
 fi
 readonly SANDBOX_CONTAINERFILE
 
@@ -369,8 +386,8 @@ CONFIG_HASH=$(echo -n "$GENERATED_CONTAINERFILE" | sha256sum | cut -c1-10)
 IMAGE_TAG="claude-sandbox:$CONFIG_HASH"
 readonly GENERATED_CONTAINERFILE CONFIG_HASH IMAGE_TAG
 
-# --- Trust-gate if project containerfile in use ---
-if [[ -n "$SANDBOX_CONTAINERFILE" && "$SANDBOX_CONTAINERFILE" != "$GLOBAL_CONTAINERFILE" ]]; then
+# --- Trust-gate if custom containerfile in use ---
+if [[ -n "$SANDBOX_CONTAINERFILE" ]]; then
     ensure_config_trusted "$GENERATED_CONTAINERFILE"
 fi
 

@@ -25,8 +25,9 @@ project (working directory).
 By default it mounts your host's claude binary into the container. This both makes the container
 image smaller and allows you to automatically get updates without rebuilding the image. However,
 this is configurable. If you want claude installed into the image because you do not have it on the
-host, or you prefer it that way, you can get that with `--claude install`.
-And if you define your own custom sandbox containerfile preamble where you install claude yourself,
+host, or you prefer it that way, you can get that with `--claude install`. This installs claude
+at the very end of the image build (after all containerfile and sandbox setup), as the sandbox user.
+And if you define your own custom containerfile where you install claude yourself,
 then you can tell claude-sandbox to neither mount nor install claude in the container with
 `--claude none`.
 
@@ -95,18 +96,32 @@ it from being poisoned by the container, since it is available with write permis
 inside the sandbox. Might want to improve here to make it invisible or read-only
 to the sandbox.
 
-The file replaces the default container preamble — it **must** include a `FROM` line.
+The file **must** include a `FROM` line. claude-sandbox splits your file at the
+first `FROM` line and injects its own instructions into the final Containerfile.
+The resulting build order is:
 
-After your preamble, claude-sandbox automatically appends user creation (matching host
-UID/GID), sudo setup, and PATH configuration. The following `ARG`s are defined before
-`FROM` and can be re-declared in your preamble to use them:
+```
+─── Your FROM line ───────────────────────────────────────────
+INJECTED: ARG USERNAME, USER_HOME, USER_UID, USER_GID
+INJECTED: User creation (matching host UID/GID)
+─── Rest of your containerfile ───────────────────────────────
+INJECTED: USER root (reset after your containerfile)
+INJECTED: Sudo setup (if sudo is installed)
+INJECTED: USER ${USERNAME}, mkdir, PATH setup
+INJECTED: Claude install (only with --claude install)
+```
+
+Since the sandbox user and ARGs are injected before the rest of your file, you
+can freely use `USER ${USERNAME}` to run commands as the sandbox user, then switch
+back with `USER root` as needed.
+
+The following `ARG`s are available directly in your containerfile (no need to
+declare them):
 
 - `USERNAME` — host username
 - `USER_HOME` — host home directory path
 - `USER_UID` — host user ID
 - `USER_GID` — host group ID
-
-Re-declare with `ARG USER_HOME` (no value) after your `FROM` line to use them.
 
 Images are tagged by config content hash — different configs produce separate images
 that rebuild automatically when the config changes.
@@ -116,19 +131,15 @@ that rebuild automatically when the config changes.
 `.claude-sandbox.containerfile`:
 ```dockerfile
 FROM fedora:latest
-# Re-declare these variables after the FROM to get access to them
-ARG USER_HOME
-ARG USER_UID
-ARG USER_GID
 
 RUN dnf install -y git curl ripgrep fd-find jq gcc sudo \
     && dnf clean all
 
-# Install Rust
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
-    CARGO_HOME=${USER_HOME}/.cargo RUSTUP_HOME=${USER_HOME}/.rustup \
-    sh -s -- -y --default-toolchain stable --component rust-analyzer \
-    && chown -R ${USER_UID}:${USER_GID} ${USER_HOME}/.cargo ${USER_HOME}/.rustup
+# Install Rust as the sandbox user — no chown needed
+USER ${USERNAME}
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    --default-toolchain stable --component rust-analyzer
+ENV PATH="${USER_HOME}/.cargo/bin:${PATH}"
 ```
 
 ### Example: Ubuntu + Node.js
