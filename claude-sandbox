@@ -100,6 +100,7 @@ OPT_REBUILD=0
 OPT_CLEANUP=0
 OPT_VERBOSE=0
 OPT_CLAUDE_SOURCE=host
+OPT_CLAUDE_EXPLICIT=0
 CLAUDE_ARGS=()
 CAP_ADD_ARGS=()
 
@@ -112,7 +113,7 @@ while [[ $# -gt 0 ]]; do
         -v|--verbose) OPT_VERBOSE=1; shift ;;
         --claude)
             case "${2:-}" in
-                host|install|none) OPT_CLAUDE_SOURCE="$2"; shift 2 ;;
+                host|install|none) OPT_CLAUDE_SOURCE="$2"; OPT_CLAUDE_EXPLICIT=1; shift 2 ;;
                 *) echo "Error: --claude must be host, install, or none" >&2; exit 1 ;;
             esac
             ;;
@@ -122,7 +123,7 @@ while [[ $# -gt 0 ]]; do
         *)            echo "Unknown option: $1" >&2; echo "Use -- to pass arguments to claude." >&2; exit 1 ;;
     esac
 done
-readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_CLAUDE_SOURCE
+readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_CLAUDE_EXPLICIT
 readonly CLAUDE_ARGS CAP_ADD_ARGS
 
 verbose() { [[ $OPT_VERBOSE -eq 1 ]] && echo -e "${COLOR_VERBOSE}[#] $*${COLOR_RESET}" >&2 || true; }
@@ -379,6 +380,15 @@ if [[ $OPT_STATELESS -eq 0 ]]; then
         [[ "$answer" =~ ^[Yy]$ ]] || exit 1
     fi
 fi
+
+# --- Auto-fallback: --claude host (default) with no host binary -> install ---
+if [[ "$OPT_CLAUDE_SOURCE" == "host" && "$OPT_CLAUDE_EXPLICIT" -eq 0 ]]; then
+    if ! command -v claude &>/dev/null; then
+        echo "Note: claude not found on host; falling back to --claude install" >&2
+        OPT_CLAUDE_SOURCE=install
+    fi
+fi
+readonly OPT_CLAUDE_SOURCE
 
 # --- Generate Containerfile, derive image tag ---
 GENERATED_CONTAINERFILE="$(generate_containerfile)"
