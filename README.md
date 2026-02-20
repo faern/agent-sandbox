@@ -103,6 +103,9 @@ claude-sandbox --agent install
 # Skip host binary mount (use when containerfile installs the agent)
 claude-sandbox --agent none
 
+# Pass --dangerously-skip-permissions to Claude Code (bypasses permission checks)
+claude-sandbox --yolo
+
 # Verbose output from the sandbox setup
 claude-sandbox -v
 ```

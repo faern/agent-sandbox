@@ -43,6 +43,7 @@ case "$(basename "$0")" in
         INSTALL_URL="https://claude.ai/install.sh"
         ENV_PATTERN='^ANTHROPIC_'
         EXTRA_ENV_VARS=()
+        YOLO_FLAG="--dangerously-skip-permissions"
         ;;
     opencode-sandbox)
         AGENT_NAME="opencode"
@@ -53,6 +54,7 @@ case "$(basename "$0")" in
         INSTALL_URL="https://opencode.ai/install"
         ENV_PATTERN='^(ANTHROPIC_|OPENAI_|GEMINI_|GROQ_|AWS_|AZURE_|OPENCODE_|GOOGLE_|GITLAB_|CLOUDFLARE_)'
         EXTRA_ENV_VARS=(GITHUB_TOKEN)
+        YOLO_FLAG=""
         ;;
     *)
         echo "Error: unknown invocation name '$(basename "$0")'." >&2
@@ -153,6 +155,7 @@ Options:
   --cap-add CAP Add a Linux capability (repeatable). By default,
                 CAP_SETUID, CAP_SETGID, and CAP_DAC_READ_SEARCH are
                 already enabled (required for sudo).
+  --yolo        Pass --dangerously-skip-permissions to $AGENT_NAME (claude-sandbox only)
   -h, --help    Show this help
 
 Arguments after -- are passed through to $AGENT_NAME.
@@ -202,6 +205,10 @@ while [[ $# -gt 0 ]]; do
         --rebuild)    OPT_REBUILD=1; shift ;;
         -c|--cleanup) OPT_CLEANUP=1; shift ;;
         -v|--verbose) OPT_VERBOSE=1; shift ;;
+        --yolo)
+            [[ -n "$YOLO_FLAG" ]] && AGENT_ARGS+=("$YOLO_FLAG")
+            shift
+            ;;
         --agent)
             case "${2:-}" in
                 host|install|none) OPT_AGENT_SOURCE="$2"; OPT_AGENT_EXPLICIT=1; shift 2 ;;
