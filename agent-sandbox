@@ -38,7 +38,7 @@ case "$(basename "$0")" in
         AGENT_NAME="claude"
         AGENT_DISPLAY_NAME="Claude Code"
         SANDBOX_NAME="claude-sandbox"
-        CONTAINERFILE_NAME=".claude-sandbox.containerfile"
+        CONTAINERFILE_NAME="Containerfile.claude"
         AUTOUPDATE_ENV="DISABLE_AUTOUPDATER"
         INSTALL_URL="https://claude.ai/install.sh"
         ENV_PATTERN='^ANTHROPIC_'
@@ -49,7 +49,7 @@ case "$(basename "$0")" in
         AGENT_NAME="opencode"
         AGENT_DISPLAY_NAME="OpenCode"
         SANDBOX_NAME="opencode-sandbox"
-        CONTAINERFILE_NAME=".opencode-sandbox.containerfile"
+        CONTAINERFILE_NAME="Containerfile.opencode"
         AUTOUPDATE_ENV="OPENCODE_DISABLE_AUTOUPDATE"
         INSTALL_URL="https://opencode.ai/install"
         ENV_PATTERN='^(ANTHROPIC_|OPENAI_|GEMINI_|GROQ_|AWS_|AZURE_|OPENCODE_|GOOGLE_|GITLAB_|CLOUDFLARE_)'

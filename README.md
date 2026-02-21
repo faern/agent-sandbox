@@ -112,7 +112,7 @@ claude-sandbox -v
 
 ## Custom containers
 
-Place a `.claude-sandbox.containerfile` (or `.opencode-sandbox.containerfile`) in your
+Place a `Containerfile.claude` (or `Containerfile.opencode`) in your
 project root, or globally in `~/.config/claude-sandbox/` (or `~/.config/opencode-sandbox/`).
 Project containerfiles override the global one.
 
@@ -152,7 +152,7 @@ that rebuild automatically when the config changes.
 
 ### Example: Fedora + Rust
 
-`.claude-sandbox.containerfile`:
+`Containerfile.claude`:
 ```dockerfile
 FROM fedora:latest
 
@@ -168,7 +168,7 @@ ENV PATH="${USER_HOME}/.cargo/bin:${PATH}"
 
 ### Example: Ubuntu + Node.js
 
-`.claude-sandbox.containerfile`:
+`Containerfile.claude`:
 ```dockerfile
 FROM ubuntu:24.04
 
