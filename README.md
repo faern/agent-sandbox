@@ -45,7 +45,7 @@ For simplicity, the sandbox gets a **copy** of your agent's config files mounted
 | Agent | Configs copied |
 |-------|---------------|
 | Claude Code | `~/.claude.json`, `~/.claude/` |
-| OpenCode | `~/.config/opencode/`, `~/.local/share/opencode/` |
+| OpenCode | `$XDG_CONFIG_HOME/opencode/`, `~/.local/share/opencode/` |
 
 This allows the agent in the sandbox to be directly logged in and have all your settings.
 Depending on your threat model this can of course be a risk.
@@ -112,8 +112,8 @@ claude-sandbox -v
 
 ## Custom containers
 
-Place a `Containerfile.claude` (or `Containerfile.opencode`) in your
-project root, or globally in `~/.config/claude-sandbox/` (or `~/.config/opencode-sandbox/`).
+Place a `Containerfile.agent` in your project root, or globally in
+`$XDG_CONFIG_HOME/agent-sandbox/` (defaults to `~/.config/agent-sandbox/`).
 Project containerfiles override the global one.
 
 Project configs require trust approval on first use and after any change. This protects
@@ -152,7 +152,7 @@ that rebuild automatically when the config changes.
 
 ### Example: Fedora + Rust
 
-`Containerfile.claude`:
+`Containerfile.agent`:
 ```dockerfile
 FROM fedora:latest
 
@@ -168,7 +168,7 @@ ENV PATH="${USER_HOME}/.cargo/bin:${PATH}"
 
 ### Example: Ubuntu + Node.js
 
-`Containerfile.claude`:
+`Containerfile.agent`:
 ```dockerfile
 FROM ubuntu:24.04
 

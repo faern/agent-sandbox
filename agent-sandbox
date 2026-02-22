@@ -164,9 +164,9 @@ Arguments after -- are passed through to $AGENT_NAME.
 
 Configuration:
   Customize the sandbox via an optional $CONTAINERFILE_NAME in the
-  project root. Global default goes in ~/.config/$SANDBOX_NAME/ (project
-  overrides global). Project configs are trust-gated — you'll be prompted
-  before they take effect.
+  project root. Global default goes in ~/.config/agent-sandbox/
+  (respects \$XDG_CONFIG_HOME). Project overrides global. Project
+  configs are trust-gated — you'll be prompted before they take effect.
 
   $CONTAINERFILE_NAME Custom containerfile. Must include a FROM line.
                                 $SANDBOX_NAME splits it at the first FROM and
