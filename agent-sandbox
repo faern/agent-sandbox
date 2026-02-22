@@ -157,7 +157,7 @@ Options:
   --cap-add CAP Add a Linux capability (repeatable). By default,
                 CAP_SETUID, CAP_SETGID, and CAP_DAC_READ_SEARCH are
                 already enabled (required for sudo).
-  --yolo        Pass --dangerously-skip-permissions to $AGENT_NAME (claude-sandbox only)
+  --yolo        Skip agent permission prompts (claude-sandbox only)
   -h, --help    Show this help
 
 Arguments after -- are passed through to $AGENT_NAME.
