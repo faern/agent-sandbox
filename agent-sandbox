@@ -157,6 +157,10 @@ Options:
   --cap-add CAP Add a Linux capability (repeatable). By default,
                 CAP_SETUID, CAP_SETGID, and CAP_DAC_READ_SEARCH are
                 already enabled (required for sudo).
+  --worktree BRANCH
+              Create (if needed) and use a git worktree for BRANCH.
+              Worktrees live under .worktrees/ in the repository root.
+              The sandbox mounts the worktree instead of the current directory.
   --yolo        Skip agent permission prompts (claude-sandbox only)
   -h, --help    Show this help
 
@@ -196,6 +200,7 @@ OPT_VERBOSE=0
 OPT_SHELL=0
 OPT_AGENT_SOURCE=host
 OPT_AGENT_EXPLICIT=0
+OPT_WORKTREE_BRANCH=""
 AGENT_ARGS=()
 CAP_ADD_ARGS=()
 
@@ -218,12 +223,16 @@ while [[ $# -gt 0 ]]; do
             esac
             ;;
         -h|--help)    usage ;;
+        --worktree)
+            OPT_WORKTREE_BRANCH="${2:?Error: --worktree requires a branch name}"
+            shift 2
+            ;;
         --cap-add)    CAP_ADD_ARGS+=(--cap-add "$2"); shift 2 ;;
         --)           shift; AGENT_ARGS+=("$@"); break ;;
         *)            echo "Unknown option: $1" >&2; echo "Use -- to pass arguments to $AGENT_NAME." >&2; exit 1 ;;
     esac
 done
-readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_SHELL OPT_AGENT_EXPLICIT
+readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_SHELL OPT_AGENT_EXPLICIT OPT_WORKTREE_BRANCH
 readonly AGENT_ARGS CAP_ADD_ARGS
 
 verbose() { [[ $OPT_VERBOSE -eq 1 ]] && echo -e "${COLOR_VERBOSE}[#] $*${COLOR_RESET}" >&2 || true; }
@@ -438,6 +447,28 @@ if [[ $OPT_CLEANUP -eq 1 ]]; then
     done <<< "$selected"
     echo "Done."
     exit 0
+fi
+
+# --- Worktree setup ---
+if [[ -n "$OPT_WORKTREE_BRANCH" ]]; then
+    if [[ $OPT_STATELESS -eq 1 ]]; then
+        echo "Error: --worktree and --stateless are mutually exclusive." >&2
+        exit 1
+    fi
+    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+        echo "Error: --worktree requires a git repository." >&2
+        exit 1
+    }
+    WORKTREE_DIR="$REPO_ROOT/.worktrees"
+    WORKTREE_PATH="$WORKTREE_DIR/$OPT_WORKTREE_BRANCH"
+    if [[ ! -d "$WORKTREE_PATH" ]]; then
+        verbose "Creating worktree at $WORKTREE_PATH for branch $OPT_WORKTREE_BRANCH"
+        #mkdir -p "$WORKTREE_DIR"
+        git worktree add "$WORKTREE_PATH"
+    else
+        verbose "Using existing worktree at $WORKTREE_PATH"
+    fi
+    cd "$WORKTREE_PATH"
 fi
 
 # --- Project containerfile discovery ---

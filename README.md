@@ -103,6 +103,9 @@ claude-sandbox --agent install
 # Skip host binary mount (use when containerfile installs the agent)
 claude-sandbox --agent none
 
+# Work in a git worktree for a specific branch
+claude-sandbox --worktree feature-branch
+
 # Skip agent permission prompts (claude-sandbox only)
 claude-sandbox --yolo
 
