@@ -162,9 +162,7 @@ Options:
                 Pass an arbitrary argument to podman run (repeatable).
                 Each invocation adds one argv element.
                 Examples: --podman-arg --network=host
-                          --podman-arg --cap-add=NET_RAW
-                Note: CAP_SETUID, CAP_SETGID, and CAP_DAC_READ_SEARCH
-                are already enabled by default (required for sudo).
+                          --podman-arg --cap-drop=ALL
   --worktree BRANCH
               Create (if needed) and use a git worktree for BRANCH.
               Worktrees live under .worktrees/ in the repository root.
@@ -584,11 +582,6 @@ RUN_ARGS=(
     --security-opt mask=/proc/kcore:/proc/kallsyms:/proc/config.gz:/proc/sched_debug:/proc/timer_list:/proc/self/mountinfo:/proc/1/mountinfo
     # Hide other users' processes in /proc
     --security-opt proc-opts=hidepid=2
-    # Drop all capabilities, then re-add the minimum needed for sudo.
-    --cap-drop=ALL
-    --cap-add CAP_SETUID
-    --cap-add CAP_SETGID
-    --cap-add CAP_DAC_READ_SEARCH
     "${PODMAN_ARGS[@]}"
 )
 
