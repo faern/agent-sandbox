@@ -50,6 +50,12 @@ For simplicity, the sandbox gets a **copy** of your agent's config files mounted
 This allows the agent in the sandbox to be directly logged in and have all your settings.
 Depending on your threat model this can of course be a risk.
 
+## Git config
+
+`~/.gitconfig` is bind-mounted read-only into the container so git has the correct
+user name, email, aliases, and other settings. Credentials and GPG/SSH keys are
+in separate files and are **not** mounted. Use `--no-gitconfig` to disable this.
+
 ## Requirements
 
 - [Podman](https://podman.io/) (rootless)
@@ -107,6 +113,9 @@ claude-sandbox --agent none
 
 # Work in a git worktree for a specific branch
 claude-sandbox --worktree feature-branch
+
+# Don't mount ~/.gitconfig into the container
+claude-sandbox --no-gitconfig
 
 # Skip agent permission prompts (claude-sandbox only)
 claude-sandbox --yolo

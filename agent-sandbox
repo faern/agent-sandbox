@@ -163,6 +163,8 @@ Options:
                 Each invocation adds one argv element.
                 Examples: --podman-arg --network=host
                           --podman-arg --cap-drop=ALL
+  --no-gitconfig
+              Don't mount ~/.gitconfig into the container
   --worktree BRANCH
               Create (if needed) and use a git worktree for BRANCH.
               Worktrees live under .worktrees/ in the repository root.
@@ -211,6 +213,7 @@ OPT_VERBOSE=0
 OPT_SHELL=0
 OPT_AGENT_SOURCE=host
 OPT_AGENT_EXPLICIT=0
+OPT_GITCONFIG=1
 OPT_WORKTREE_BRANCH=""
 AGENT_ARGS=()
 PODMAN_ARGS=()
@@ -234,6 +237,7 @@ while [[ $# -gt 0 ]]; do
             esac
             ;;
         -h|--help)    usage ;;
+        --no-gitconfig) OPT_GITCONFIG=0; shift ;;
         --worktree)
             OPT_WORKTREE_BRANCH="${2:?Error: --worktree requires a branch name}"
             shift 2
@@ -243,7 +247,7 @@ while [[ $# -gt 0 ]]; do
         *)            echo "Unknown option: $1" >&2; echo "Use -- to pass arguments to $AGENT_NAME." >&2; exit 1 ;;
     esac
 done
-readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_SHELL OPT_AGENT_EXPLICIT OPT_WORKTREE_BRANCH
+readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_SHELL OPT_GITCONFIG OPT_AGENT_EXPLICIT OPT_WORKTREE_BRANCH
 readonly AGENT_ARGS PODMAN_ARGS
 
 verbose() { [[ $OPT_VERBOSE -eq 1 ]] && echo -e "${COLOR_VERBOSE}[#] $*${COLOR_RESET}" >&2 || true; }
@@ -405,6 +409,11 @@ prepare_sandbox_home() {
     trap 'rm -rf "$SANDBOX_DIR"' EXIT
 
     prepare_agent_config
+
+    if [[ $OPT_GITCONFIG -eq 1 && -f "$HOME/.gitconfig" ]]; then
+        cp "$HOME/.gitconfig" "$SANDBOX_DIR/.gitconfig"
+    fi
+
     verbose "Sandbox home: $SANDBOX_DIR"
 }
 
@@ -417,6 +426,11 @@ build_mounts() {
         local mount_mode="rw"
         [[ $OPT_READ_ONLY -eq 1 ]] && mount_mode="ro"
         RUN_ARGS+=(-v "$PWD:$PWD:${mount_mode},z")
+    fi
+
+    # Mount gitconfig read-only so git has the right user name, email, aliases, etc.
+    if [[ $OPT_GITCONFIG -eq 1 && -f "$SANDBOX_DIR/.gitconfig" ]]; then
+        RUN_ARGS+=(-v "$SANDBOX_DIR/.gitconfig:$HOME/.gitconfig:ro,z")
     fi
 }
 
