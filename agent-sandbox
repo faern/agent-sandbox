@@ -363,7 +363,10 @@ POSTFROM_EOF
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        git curl ca-certificates ripgrep fd-find jq build-essential sudo \
+        git gh curl ca-certificates build-essential sudo \
+        clang shellcheck python3-pip \
+        ripgrep jq yq xxd fd-find cloc \
+        socat netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 PREAMBLE_EOF
     fi
