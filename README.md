@@ -91,8 +91,10 @@ claude-sandbox --shell
 # Pass args to the agent after a double dash (--)
 claude-sandbox -- --model sonnet -p "explain this repo"
 
-# Add Linux capabilities
-claude-sandbox --cap-add NET_RAW
+# Pass extra arguments to podman run
+claude-sandbox --podman-arg --network=host
+claude-sandbox --podman-arg --cap-add=NET_RAW
+claude-sandbox --podman-arg --volume=/host/path:/sandbox/path:ro
 
 # List and remove old images
 claude-sandbox --cleanup

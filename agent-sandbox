@@ -158,9 +158,13 @@ Options:
                 install: Install $AGENT_NAME into container during image build.
                 none:    Don't provide $AGENT_NAME at all. You are expected to
                          install it via the containerfile
-  --cap-add CAP Add a Linux capability (repeatable). By default,
-                CAP_SETUID, CAP_SETGID, and CAP_DAC_READ_SEARCH are
-                already enabled (required for sudo).
+  --podman-arg ARG
+                Pass an arbitrary argument to podman run (repeatable).
+                Each invocation adds one argv element.
+                Examples: --podman-arg --network=host
+                          --podman-arg --cap-add=NET_RAW
+                Note: CAP_SETUID, CAP_SETGID, and CAP_DAC_READ_SEARCH
+                are already enabled by default (required for sudo).
   --worktree BRANCH
               Create (if needed) and use a git worktree for BRANCH.
               Worktrees live under .worktrees/ in the repository root.
@@ -211,7 +215,7 @@ OPT_AGENT_SOURCE=host
 OPT_AGENT_EXPLICIT=0
 OPT_WORKTREE_BRANCH=""
 AGENT_ARGS=()
-CAP_ADD_ARGS=()
+PODMAN_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -236,13 +240,13 @@ while [[ $# -gt 0 ]]; do
             OPT_WORKTREE_BRANCH="${2:?Error: --worktree requires a branch name}"
             shift 2
             ;;
-        --cap-add)    CAP_ADD_ARGS+=(--cap-add "$2"); shift 2 ;;
+        --podman-arg) PODMAN_ARGS+=("$2"); shift 2 ;;
         --)           shift; AGENT_ARGS+=("$@"); break ;;
         *)            echo "Unknown option: $1" >&2; echo "Use -- to pass arguments to $AGENT_NAME." >&2; exit 1 ;;
     esac
 done
 readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_SHELL OPT_AGENT_EXPLICIT OPT_WORKTREE_BRANCH
-readonly AGENT_ARGS CAP_ADD_ARGS
+readonly AGENT_ARGS PODMAN_ARGS
 
 verbose() { [[ $OPT_VERBOSE -eq 1 ]] && echo -e "${COLOR_VERBOSE}[#] $*${COLOR_RESET}" >&2 || true; }
 
@@ -581,12 +585,11 @@ RUN_ARGS=(
     # Hide other users' processes in /proc
     --security-opt proc-opts=hidepid=2
     # Drop all capabilities, then re-add the minimum needed for sudo.
-    # Users can add more with --cap-add.
     --cap-drop=ALL
     --cap-add CAP_SETUID
     --cap-add CAP_SETGID
     --cap-add CAP_DAC_READ_SEARCH
-    "${CAP_ADD_ARGS[@]}"
+    "${PODMAN_ARGS[@]}"
 )
 
 # Pass through matching env vars to the container
