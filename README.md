@@ -195,6 +195,23 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 
 - `SANDBOX_CONTAINERFILE` — override containerfile path (must exist, skips discovery)
 
+### Runtime env file
+
+Place a `sandbox.env` in `$XDG_CONFIG_HOME/agent-sandbox/` (defaults to
+`~/.config/agent-sandbox/sandbox.env`) to pass extra environment variables into
+the container at runtime. This is useful for tokens or credentials that should
+not be baked into the image.
+
+The file uses podman's native `--env-file` format:
+
+```env
+# API tokens
+GH_TOKEN=github_pat_xxxxxxxxxxxx
+
+# Pass through from host environment (no value — uses host's value)
+SOME_HOST_VAR
+```
+
 ## License
 
 This project is licensed under the [GNU General Public License v3.0 or later](LICENSE).

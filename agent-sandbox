@@ -133,6 +133,10 @@ readonly GLOBAL_CONTAINERFILE="$GLOBAL_CONFIG_DIR/$CONTAINERFILE_NAME"
 # in here will not be parsed until manually approved.
 readonly TRUSTED_CONFIGS_DIR="$GLOBAL_CONFIG_DIR/trusted-configs"
 
+# Optional env file for runtime environment variables (e.g. API tokens).
+# Uses podman's native --env-file format: KEY=VALUE, KEY (passthrough), # comments.
+readonly GLOBAL_ENV_FILE="$GLOBAL_CONFIG_DIR/sandbox.env"
+
 usage() {
     cat <<EOF
 Usage: $SANDBOX_NAME [OPTIONS] [-- ] [${AGENT_NAME^^}_ARGS...]
@@ -187,6 +191,11 @@ Configuration:
 
 Environment variables:
   SANDBOX_CONTAINERFILE         Override containerfile path (must exist, skips discovery)
+
+Runtime env file:
+  Place a sandbox.env in ~/.config/agent-sandbox/ (respects \$XDG_CONFIG_HOME)
+  to pass extra environment variables into the container. Uses podman --env-file
+  format: KEY=VALUE lines, KEY-only lines (pass through from host), # comments.
 EOF
     exit 0
 }
@@ -591,6 +600,12 @@ for var in "${EXTRA_ENV_VARS[@]}"; do
         RUN_ARGS+=(-e "$var")
     fi
 done
+
+# Pass through env vars from global sandbox.env file
+if [[ -f "$GLOBAL_ENV_FILE" ]]; then
+    verbose "Loading env file: $GLOBAL_ENV_FILE"
+    RUN_ARGS+=(--env-file "$GLOBAL_ENV_FILE")
+fi
 
 # In stateless mode, create /null as a tmpfs mount for the working directory
 if [[ $OPT_STATELESS -eq 1 ]]; then
