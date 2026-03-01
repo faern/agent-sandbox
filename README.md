@@ -2,8 +2,8 @@
 
 Run AI coding agents inside rootless podman containers.
 Supports [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and
-[OpenCode](https://opencode.ai/). Isolates the agent from your system — it can only
-access the current working directory. Currently only designed for being used on a Linux host.
+[OpenCode](https://opencode.ai/). Isolates the agent from your system — the host filesystem is not accessible
+except for a small set of controlled mounts. Currently only designed for being used on a Linux host.
 
 The sandbox gets a user with the same username and home dir as on your host. The container
 then runs with `--userns=keep-id` so file ownership matches the host. The intention is that all
@@ -16,15 +16,46 @@ All it does is help you isolate the agent in a container to prevent it from acce
 host system, or messing up files outside your project working directory.
 
 `agent-sandbox` does not come with any prebuilt container images. Instead the script builds
-an image on demand when executed. The default container definition is very minimal,
-so it is fast to build. The container definition is configurable both globally and per
-project (working directory).
+an image on demand when executed. The default image is based on Ubuntu and includes
+standard development tools (compilers, version control, search utilities, etc.).
+The container definition is configurable both globally and per project (working directory).
 
 ## How it works
 
 `agent-sandbox` is a single script. It is invoked via symlinks named `claude-sandbox` and
 `opencode-sandbox`. The script detects which agent to use based on the name it was invoked as.
 Each agent gets its own config paths, environment variables, and install method.
+
+## Sandbox boundary
+
+The container runs as a rootless podman container with no access to the host
+filesystem beyond a controlled set of mounts:
+
+| What | Mode | Notes |
+|------|------|-------|
+| Project directory (`$PWD`) | read-write | Read-only with `--read-only`. Omitted with `--stateless`. |
+| Agent config | read-write | Ephemeral copy per session — changes don't affect the host (see below). |
+| `~/.gitconfig` | read-only | Disable with `--no-gitconfig`. Git credentials and SSH/GPG keys are **not** mounted. |
+| Agent binary | read-only | Only with `--agent host` (default). |
+| Repository `.git` dir | same as project | Only when using `--worktree`. |
+| Claude credentials | read-write | `~/.claude/.credentials.json` mounted directly from host so OAuth token refreshes persist. |
+
+Agent config files are copied into an ephemeral directory per session:
+
+| Agent | Configs copied |
+|-------|---------------|
+| Claude Code | `~/.claude.json`, `~/.claude/` |
+| OpenCode | `$XDG_CONFIG_HOME/opencode/`, `~/.local/share/opencode/` |
+
+This means the agent is directly logged in and has your settings.
+Depending on your threat model this can be a risk.
+
+Additional hardening:
+
+- Runs rootless with `--userns=keep-id` (no host root privileges)
+- Sensitive `/proc` paths are masked (`kcore`, `kallsyms`, `config.gz`, etc.)
+- Host processes are hidden (`hidepid=2`)
+- The script warns and prompts for confirmation if run from `$HOME` or outside `$HOME`
 
 ## Agent binary
 
@@ -37,24 +68,6 @@ image small and lets you get updates without rebuilding. This is configurable wi
   (runs the agent's official install script as the sandbox user).
 - `--agent none` — Don't provide the agent at all. Use this when your custom
   containerfile installs it.
-
-## Login credentials and configs
-
-For simplicity, the sandbox gets a **copy** of your agent's config files mounted into it.
-
-| Agent | Configs copied |
-|-------|---------------|
-| Claude Code | `~/.claude.json`, `~/.claude/` |
-| OpenCode | `$XDG_CONFIG_HOME/opencode/`, `~/.local/share/opencode/` |
-
-This allows the agent in the sandbox to be directly logged in and have all your settings.
-Depending on your threat model this can of course be a risk.
-
-## Git config
-
-`~/.gitconfig` is bind-mounted read-only into the container so git has the correct
-user name, email, aliases, and other settings. Credentials and GPG/SSH keys are
-in separate files and are **not** mounted. Use `--no-gitconfig` to disable this.
 
 ## Requirements
 
