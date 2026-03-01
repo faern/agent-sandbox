@@ -1,0 +1,24 @@
+# Base containerfile to base agent-sandbox containers off of
+FROM fedora:43
+
+RUN dnf install -y \
+    git gh \
+    clang shellcheck python3-pip \
+    ripgrep jq yq xxd fd-find tokei cloc \
+    socat netcat && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
+
+USER ${USERNAME}
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    --default-toolchain stable \
+    --profile default \
+    --component rust-analyzer,miri,rustfmt
+ENV PATH="${USER_HOME}/.cargo/bin:${PATH}"
+
+# Install cargo-binstall. Allows installing other Rust tools way faster
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+# Install cargo-shear for checking unused dependencies
+RUN cargo binstall cargo-shear
