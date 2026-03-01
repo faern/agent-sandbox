@@ -82,6 +82,10 @@ prepare_agent_config() {
             # Remove credentials from ephemeral copy — they will be
             # mounted directly from the host so token refreshes persist.
             rm -f "$SANDBOX_DIR/.claude/.credentials.json"
+            # Remove all project data from the ephemeral copy so the sandbox
+            # can't see conversations or memory from other projects. The
+            # current project's dir is mounted directly from the host.
+            rm -rf "$SANDBOX_DIR/.claude/projects/*"
             ;;
         opencode)
             local opencode_config_dir="$XDG_CONFIG_HOME/opencode"
@@ -109,6 +113,15 @@ build_agent_mounts() {
             local creds="$HOME/.claude/.credentials.json"
             [[ -f "$creds" ]] || touch "$creds"
             RUN_ARGS+=(-v "$creds:$creds:rw,z")
+            # Mount project conversation dir directly from host so conversations
+            # persist across sessions
+            if [[ $OPT_STATELESS -eq 0 ]]; then
+                local project_dir_name
+                project_dir_name=$(claude_project_dir_name "$PWD")
+                local host_project_dir="$HOME/.claude/projects/$project_dir_name"
+                mkdir -p "$host_project_dir"
+                RUN_ARGS+=(-v "$host_project_dir:$host_project_dir:rw,z")
+            fi
             ;;
         opencode)
             RUN_ARGS+=(-v "$SANDBOX_DIR/config-opencode:$XDG_CONFIG_HOME/opencode:rw,z")
@@ -123,6 +136,12 @@ containerfile_extra_dirs() {
         claude)  ;;
         opencode) echo " ${user_home}/.config/opencode ${user_home}/.local/share/opencode" ;;
     esac
+}
+
+# Computes the escaped directory name Claude Code uses for per-project data
+# (e.g. /home/user/src/project -> -home-user-src-project).
+claude_project_dir_name() {
+    echo "$1" | tr '/.' '-'
 }
 
 # --- Terminal styles ---

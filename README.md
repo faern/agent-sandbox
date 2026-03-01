@@ -34,10 +34,11 @@ filesystem beyond a controlled set of mounts:
 | What | Mode | Notes |
 |------|------|-------|
 | Project directory (`$PWD`) | read-write | Read-only with `--read-only`. Omitted with `--stateless`. |
-| Agent config | read-write | Ephemeral copy per session — changes don't affect the host (see below). |
+| Agent config | read-write | Ephemeral copy per session — changes don't affect the host (see below). Conversations are the exception (see next row). |
 | `~/.gitconfig` | read-only | Disable with `--no-gitconfig`. Git credentials and SSH/GPG keys are **not** mounted. |
 | Agent binary | read-only | Only with `--agent host` (default). |
 | Repository `.git` dir | same as project | Only when using `--worktree`. |
+| Claude project conversations | read-write | `~/.claude/projects/<project>/` mounted directly from host so conversations persist across sessions. Omitted with `--stateless`. |
 | Claude credentials | read-write | `~/.claude/.credentials.json` mounted directly from host so OAuth token refreshes persist. |
 
 Agent config files are copied into an ephemeral directory per session:
