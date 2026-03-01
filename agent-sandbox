@@ -436,6 +436,12 @@ build_mounts() {
         local mount_mode="rw"
         [[ $OPT_READ_ONLY -eq 1 ]] && mount_mode="ro"
         RUN_ARGS+=(-v "$PWD:$PWD:${mount_mode},z")
+
+        # When using a worktree, mount the main .git dir so git can
+        # follow the worktree's gitdir pointer back to the repository.
+        if [[ -n "$OPT_WORKTREE_BRANCH" ]]; then
+            RUN_ARGS+=(-v "$REPO_ROOT/.git:$REPO_ROOT/.git:${mount_mode},z")
+        fi
     fi
 
     # Mount gitconfig read-only so git has the right user name, email, aliases, etc.
