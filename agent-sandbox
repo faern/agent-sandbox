@@ -79,6 +79,9 @@ prepare_agent_config() {
             else
                 mkdir -p "$SANDBOX_DIR/.claude"
             fi
+            # Remove credentials from ephemeral copy — they will be
+            # mounted directly from the host so token refreshes persist.
+            rm -f "$SANDBOX_DIR/.claude/.credentials.json"
             ;;
         opencode)
             local opencode_config_dir="$XDG_CONFIG_HOME/opencode"
@@ -102,6 +105,10 @@ build_agent_mounts() {
         claude)
             RUN_ARGS+=(-v "$SANDBOX_DIR/claude.json:$HOME/.claude.json:rw,z")
             RUN_ARGS+=(-v "$SANDBOX_DIR/.claude:$HOME/.claude:rw,z")
+            # Mount credentials directly from host so OAuth token refreshes persist
+            local creds="$HOME/.claude/.credentials.json"
+            [[ -f "$creds" ]] || touch "$creds"
+            RUN_ARGS+=(-v "$creds:$creds:rw,z")
             ;;
         opencode)
             RUN_ARGS+=(-v "$SANDBOX_DIR/config-opencode:$XDG_CONFIG_HOME/opencode:rw,z")
