@@ -391,7 +391,7 @@ RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         git gh curl ca-certificates build-essential sudo \
         clang shellcheck python3-pip \
-        ripgrep jq yq xxd fd-find cloc \
+        ripgrep jq yq xxd fd-find cloc bc \
         socat netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 PREAMBLE_EOF

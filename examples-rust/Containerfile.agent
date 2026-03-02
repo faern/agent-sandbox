@@ -4,7 +4,7 @@ FROM fedora:43
 RUN dnf install -y \
     git gh \
     clang shellcheck python3-pip \
-    ripgrep jq yq xxd fd-find tokei cloc \
+    ripgrep jq yq xxd fd-find tokei cloc bc \
     socat netcat && \
     dnf clean all && \
     rm -rf /var/cache/dnf
