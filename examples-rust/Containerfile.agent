@@ -1,13 +1,27 @@
 # Base containerfile to base agent-sandbox containers off of
 FROM fedora:43
 
-RUN dnf install -y \
-    git gh \
-    clang shellcheck python3-pip \
-    ripgrep jq yq xxd fd-find tokei cloc bc \
-    socat netcat && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf
+RUN <<EOF
+  set -e
+  # Base tooling
+  dnf install -y which python3-pip
+  # Version control
+  dnf install -y git gh
+  # Build tools and linters
+  dnf install -y clang shellcheck
+  # Search, text processing, and utilities
+  dnf install -y ripgrep jq yq xxd fd-find tokei cloc bc
+  # Conversion/parsing of PDF/html and similar document types
+  dnf install -y poppler-utils pandoc
+  # Networking
+  dnf install -y socat netcat
+  # Clean up and remove cache to slim down image
+  dnf clean all
+  rm -rf /var/cache/dnf
+EOF
+
+# Install more PDF parsing tools
+RUN pip install pymupdf pdfplumber
 
 USER ${USERNAME}
 # Install Rust

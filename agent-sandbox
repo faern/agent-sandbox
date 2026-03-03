@@ -387,13 +387,29 @@ POSTFROM_EOF
         echo "$post_from_block"
         cat <<'PREAMBLE_EOF'
 
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        git gh curl ca-certificates build-essential sudo \
-        clang shellcheck python3-pip \
-        ripgrep jq yq xxd fd-find cloc bc \
-        socat netcat-openbsd \
-    && rm -rf /var/lib/apt/lists/*
+RUN <<EOF
+  set -e
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  # Base tooling
+  apt-get install -y --no-install-recommends curl ca-certificates python3-pip sudo
+  # Version control
+  apt-get install -y --no-install-recommends git gh
+  # Build tools and linters
+  apt-get install -y --no-install-recommends build-essential clang shellcheck
+  # Search, text processing, and utilities
+  apt-get install -y --no-install-recommends ripgrep jq yq xxd fd-find cloc bc
+  # Conversion/parsing of PDF/html and similar document types
+  apt-get install -y --no-install-recommends poppler-utils pandoc
+  # Networking
+  apt-get install -y --no-install-recommends socat netcat-openbsd
+  # Clean up package lists to slim down image
+  rm -rf /var/lib/apt/lists/*
+EOF
+
+# Install more PDF parsing tools (that are not in apt)
+RUN pip install --break-system-packages pymupdf pdfplumber
+
 PREAMBLE_EOF
     fi
 
