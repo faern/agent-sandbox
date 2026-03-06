@@ -400,7 +400,7 @@ RUN <<EOF
   # Build tools and linters
   apt-get install -y --no-install-recommends build-essential clang shellcheck
   # Search, text processing, and utilities
-  apt-get install -y --no-install-recommends ripgrep jq yq xxd fd-find cloc bc vim
+  apt-get install -y --no-install-recommends ripgrep jq yq xxd fd-find cloc bc vim util-linux
   # Conversion/parsing of PDF/html and similar document types
   apt-get install -y --no-install-recommends poppler-utils pandoc
   # Networking

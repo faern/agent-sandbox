@@ -10,7 +10,7 @@ RUN <<EOF
   # Build tools and linters
   dnf install -y clang shellcheck
   # Search, text processing, and utilities
-  dnf install -y ripgrep jq yq xxd fd-find tokei cloc bc vim
+  dnf install -y ripgrep jq yq xxd fd-find tokei cloc bc vim util-linux-core
   # Conversion/parsing of PDF/html and similar document types
   dnf install -y poppler-utils pandoc
   # Networking
