@@ -128,6 +128,9 @@ claude-sandbox --agent none
 # Work in a git worktree for a specific branch
 claude-sandbox --worktree feature-branch
 
+# Pass through /dev/kvm for running VMs inside the sandbox
+claude-sandbox --kvm
+
 # Don't mount ~/.gitconfig into the container
 claude-sandbox --no-gitconfig
 
