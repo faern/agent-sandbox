@@ -192,6 +192,14 @@ Options:
   --kvm         Pass --device=/dev/kvm to podman
   --no-gitconfig
               Don't mount ~/.gitconfig into the container
+  --git none|ro|rw
+              Control .git directory access in the sandbox.
+              none:  Do not mount .git into the container.
+              ro:    Mount .git read-only.
+              rw:    Mount .git read-write.
+              Default: rw (ro with --read-only, none with --stateless).
+              When at the repository root, .git is inside the project
+              mount and follows its access mode.
   --worktree BRANCH
               Create (if needed) and use a git worktree for BRANCH.
               Worktrees live under .worktrees/ in the repository root.
@@ -242,6 +250,7 @@ OPT_AGENT_SOURCE=host
 OPT_AGENT_EXPLICIT=0
 OPT_GITCONFIG=1
 OPT_KVM=0
+OPT_GIT=""
 OPT_WORKTREE_BRANCH=""
 AGENT_ARGS=()
 PODMAN_ARGS=()
@@ -267,6 +276,12 @@ while [[ $# -gt 0 ]]; do
         -h|--help)    usage ;;
         --kvm)          OPT_KVM=1; shift ;;
         --no-gitconfig) OPT_GITCONFIG=0; shift ;;
+        --git)
+            case "${2:-}" in
+                none|ro|rw) OPT_GIT="$2"; shift 2 ;;
+                *) echo "Error: --git must be none, ro, or rw" >&2; exit 1 ;;
+            esac
+            ;;
         --worktree)
             OPT_WORKTREE_BRANCH="${2:?Error: --worktree requires a branch name}"
             shift 2
@@ -477,10 +492,19 @@ build_mounts() {
         [[ $OPT_READ_ONLY -eq 1 ]] && mount_mode="ro"
         RUN_ARGS+=(-v "$PWD:$PWD:${mount_mode},z")
 
-        # When using a worktree, mount the main .git dir so git can
-        # follow the worktree's gitdir pointer back to the repository.
-        if [[ -n "$OPT_WORKTREE_BRANCH" ]]; then
-            RUN_ARGS+=(-v "$REPO_ROOT/.git:$REPO_ROOT/.git:${mount_mode},z")
+        # Mount .git if requested and available, but only when it is
+        # outside the project mount (otherwise the project mount covers it).
+        if [[ "$OPT_GIT" != "none" && -n "$REPO_ROOT" && "$REPO_ROOT" != "$PWD" ]]; then
+            verbose "Mounting git repo root $REPO_ROOT"
+            RUN_ARGS+=(-v "$REPO_ROOT/.git:$REPO_ROOT/.git:${OPT_GIT},z")
+            # The project bind mount creates a filesystem boundary that
+            # prevents git from discovering .git in a parent directory.
+            RUN_ARGS+=(-e GIT_DISCOVERY_ACROSS_FILESYSTEM=1)
+            # The repo root is an auto-created mount point, not owned by
+            # the user — tell git to trust it.
+            RUN_ARGS+=(-e GIT_CONFIG_COUNT=1)
+            RUN_ARGS+=(-e GIT_CONFIG_KEY_0=safe.directory)
+            RUN_ARGS+=(-e "GIT_CONFIG_VALUE_0=$REPO_ROOT")
         fi
     fi
 
@@ -530,16 +554,19 @@ if [[ $OPT_CLEANUP -eq 1 ]]; then
     exit 0
 fi
 
+# --- Git repository detection ---
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || REPO_ROOT=""
+
 # --- Worktree setup ---
 if [[ -n "$OPT_WORKTREE_BRANCH" ]]; then
     if [[ $OPT_STATELESS -eq 1 ]]; then
         echo "Error: --worktree and --stateless are mutually exclusive." >&2
         exit 1
     fi
-    REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    if [[ -z "$REPO_ROOT" ]]; then
         echo "Error: --worktree requires a git repository." >&2
         exit 1
-    }
+    fi
     WORKTREE_DIR="$REPO_ROOT/.worktrees"
     WORKTREE_PATH="$WORKTREE_DIR/$OPT_WORKTREE_BRANCH"
     if [[ ! -d "$WORKTREE_PATH" ]]; then
@@ -551,6 +578,25 @@ if [[ -n "$OPT_WORKTREE_BRANCH" ]]; then
     fi
     cd "$WORKTREE_PATH"
 fi
+
+# --- Resolve --git default and validate ---
+if [[ -z "$OPT_GIT" ]]; then
+    if [[ $OPT_STATELESS -eq 1 ]]; then
+        OPT_GIT="none"
+    elif [[ -n "$OPT_WORKTREE_BRANCH" ]]; then
+        OPT_GIT="rw"
+    elif [[ $OPT_READ_ONLY -eq 1 ]]; then
+        OPT_GIT="ro"
+    else
+        OPT_GIT="rw"
+    fi
+fi
+
+if [[ -n "$OPT_WORKTREE_BRANCH" && "$OPT_GIT" != "rw" ]]; then
+    echo "Error: --worktree requires --git rw (worktrees need write access to .git)." >&2
+    exit 1
+fi
+readonly OPT_GIT
 
 # --- Project containerfile discovery ---
 # SANDBOX_CONTAINERFILE env override takes precedence (must exist).

@@ -37,7 +37,7 @@ filesystem beyond a controlled set of mounts:
 | Agent config | read-write | Ephemeral copy per session — changes don't affect the host (see below). Conversations are the exception (see next row). |
 | `~/.gitconfig` | read-only | Disable with `--no-gitconfig`. Git credentials and SSH/GPG keys are **not** mounted. |
 | Agent binary | read-only | Only with `--agent host` (default). |
-| Repository `.git` dir | same as project | Only when using `--worktree`. |
+| Repository `.git` dir | read-write | Controlled by `--git`. Default `rw` (`ro` with `--read-only`, omitted with `--stateless` or `--git none`). At repo root, `.git` is inside the project mount. |
 | Claude project conversations | read-write | `~/.claude/projects/<project>/` mounted directly from host so conversations persist across sessions. Omitted with `--stateless`. |
 | Claude credentials | read-write | `~/.claude/.credentials.json` mounted directly from host so OAuth token refreshes persist. |
 
@@ -133,6 +133,12 @@ claude-sandbox --kvm
 
 # Don't mount ~/.gitconfig into the container
 claude-sandbox --no-gitconfig
+
+# Mount .git read-only (git log/diff works, but no commits)
+claude-sandbox --git ro
+
+# No .git access at all
+claude-sandbox --git none
 
 # Skip agent permission prompts (claude-sandbox only)
 claude-sandbox --yolo
