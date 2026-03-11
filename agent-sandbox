@@ -693,7 +693,6 @@ RUN_ARGS=(
     -e TERM=xterm-256color
     -e COLORTERM
     -w "$WORKDIR"
-    -it
     # Mask /proc paths that leak host info (kernel symbols, memory, mounts, scheduler)
     --security-opt mask=/proc/kcore:/proc/kallsyms:/proc/config.gz:/proc/sched_debug:/proc/timer_list:/proc/self/mountinfo:/proc/1/mountinfo
     # Hide other users' processes in /proc
@@ -744,7 +743,22 @@ if [[ "$OPT_AGENT_SOURCE" == "host" ]]; then
 fi
 
 ENTRY_CMD="$AGENT_NAME"
-[[ $OPT_SHELL -eq 1 ]] && ENTRY_CMD="bash"
+ENTRY_ARGS=("${AGENT_ARGS[@]}")
+if [[ $OPT_SHELL -eq 1 ]]; then
+    ENTRY_CMD="bash"
+    # When --shell is given with arguments, run them as a command
+    # (bash -c "cmd args...") instead of passing as positional args.
+    if [[ ${#ENTRY_ARGS[@]} -gt 0 ]]; then
+        ENTRY_ARGS=(-c "${ENTRY_ARGS[*]}")
+    fi
+fi
 
-verbose "podman run ${RUN_ARGS[*]} $IMAGE_TAG $ENTRY_CMD ${AGENT_ARGS[*]}"
-podman run "${RUN_ARGS[@]}" "$IMAGE_TAG" "$ENTRY_CMD" "${AGENT_ARGS[@]}"
+# Allocate a TTY only when both stdin and stdout are terminals.
+# Skipping -t when stdout is redirected/piped prevents programs inside the
+# container (e.g. git log) from launching a pager and hanging.
+if [[ -t 0 && -t 1 ]]; then
+    RUN_ARGS+=(-it)
+fi
+
+verbose "podman run ${RUN_ARGS[*]} $IMAGE_TAG $ENTRY_CMD ${ENTRY_ARGS[*]}"
+podman run "${RUN_ARGS[@]}" "$IMAGE_TAG" "$ENTRY_CMD" "${ENTRY_ARGS[@]}"
