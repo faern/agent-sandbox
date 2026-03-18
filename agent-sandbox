@@ -456,8 +456,11 @@ RUN <<EOF
   rm -rf /var/lib/apt/lists/*
 EOF
 
+# Install uv (fast Python package manager, includes uvx for running CLI tools)
+RUN pip install --break-system-packages uv
+
 # Install more PDF parsing tools (that are not in apt)
-RUN pip install --break-system-packages pymupdf pdfplumber
+RUN uv pip install --system pymupdf pdfplumber
 
 PREAMBLE_EOF
     fi
