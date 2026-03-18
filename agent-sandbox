@@ -58,9 +58,19 @@ case "$(basename "$0")" in
         EXTRA_ENV_VARS=(GITHUB_TOKEN)
         YOLO_FLAG=""
         ;;
+    vibe-sandbox)
+        AGENT_NAME="vibe"
+        AGENT_DISPLAY_NAME="Mistral Vibe"
+        SANDBOX_NAME="vibe-sandbox"
+        AUTOUPDATE_ENV=""
+        INSTALL_URL="https://mistral.ai/vibe/install.sh"
+        ENV_PATTERN='^(MISTRAL_|VIBE_)'
+        EXTRA_ENV_VARS=()
+        YOLO_FLAG=""
+        ;;
     *)
         echo "Error: unknown invocation name '$(basename "$0")'." >&2
-        echo "Symlink or rename this script to 'claude-sandbox' or 'opencode-sandbox'." >&2
+        echo "Symlink or rename this script to 'claude-sandbox', 'opencode-sandbox', or 'vibe-sandbox'." >&2
         exit 1
         ;;
 esac
@@ -100,6 +110,18 @@ prepare_agent_config() {
                 mkdir -p "$SANDBOX_DIR/share-opencode"
             fi
             ;;
+        vibe)
+            # Copy main Vibe config directory
+            if [[ -d "$HOME/.vibe" ]]; then
+                cp -r "$HOME/.vibe" "$SANDBOX_DIR/.vibe"
+            else
+                mkdir -p "$SANDBOX_DIR/.vibe"
+            fi
+            # Copy XDG config directory if it exists
+            if [[ -d "$XDG_CONFIG_HOME/vibe" ]]; then
+                cp -r "$XDG_CONFIG_HOME/vibe" "$SANDBOX_DIR/config-vibe"
+            fi
+            ;;
     esac
 }
 
@@ -127,6 +149,12 @@ build_agent_mounts() {
             RUN_ARGS+=(-v "$SANDBOX_DIR/config-opencode:$XDG_CONFIG_HOME/opencode:rw,z")
             RUN_ARGS+=(-v "$SANDBOX_DIR/share-opencode:$HOME/.local/share/opencode:rw,z")
             ;;
+        vibe)
+            RUN_ARGS+=(-v "$SANDBOX_DIR/.vibe:$HOME/.vibe:rw,z")
+            if [[ -d "$SANDBOX_DIR/config-vibe" ]]; then
+                RUN_ARGS+=(-v "$SANDBOX_DIR/config-vibe:$XDG_CONFIG_HOME/vibe:rw,z")
+            fi
+            ;;
     esac
 }
 
@@ -135,6 +163,7 @@ containerfile_extra_dirs() {
     case "$AGENT_NAME" in
         claude)  ;;
         opencode) echo " ${user_home}/.config/opencode ${user_home}/.local/share/opencode" ;;
+        vibe) echo " ${user_home}/.vibe ${user_home}/.config/vibe" ;;
     esac
 }
 
@@ -634,7 +663,11 @@ fi
 
 # --- Auto-fallback: --agent host (default) with no host binary -> install ---
 if [[ "$OPT_AGENT_SOURCE" == "host" && "$OPT_AGENT_EXPLICIT" -eq 0 ]]; then
-    if ! command -v "$AGENT_NAME" &>/dev/null; then
+    # For Vibe, always use install mode since it can't be mounted from host
+    if [[ "$AGENT_NAME" == "vibe" ]]; then
+        echo "Note: Using --agent install for Mistral Vibe (host mounting not supported)" >&2
+        OPT_AGENT_SOURCE=install
+    elif ! command -v "$AGENT_NAME" &>/dev/null; then
         echo "Note: $AGENT_NAME not found on host; falling back to --agent install" >&2
         OPT_AGENT_SOURCE=install
     fi
@@ -685,7 +718,6 @@ RUN_ARGS=(
     --name "$CONTAINER_NAME"
     --userns="keep-id:uid=$(id -u),gid=$(id -g)"
     --label "${SANDBOX_NAME}.project-dir=$PWD"
-    -e "${AUTOUPDATE_ENV}=1"
     # Enable websearch via EXA for OpenCode (https://opencode.ai/docs/tools#websearch)
     -e OPENCODE_ENABLE_EXA=1
     # Enable LSP support in OpenCode (https://opencode.ai/docs/tools#lsp-experimental)
@@ -726,6 +758,11 @@ fi
 # Build mount args directly into RUN_ARGS (avoids word-splitting issues with paths)
 build_mounts
 
+# Add autoupdate environment variable if applicable
+if [[ -n "$AUTOUPDATE_ENV" ]]; then
+    RUN_ARGS+=(-e "${AUTOUPDATE_ENV}=1")
+fi
+
 # --- KVM passthrough ---
 if [[ $OPT_KVM -eq 1 ]]; then
     RUN_ARGS+=(--device=/dev/kvm)
@@ -733,6 +770,15 @@ fi
 
 # --- Resolve and mount host agent binary ---
 if [[ "$OPT_AGENT_SOURCE" == "host" ]]; then
+    # Vibe cannot be mounted from host as it's a Python script with dependencies
+    # Force install mode for Vibe
+    if [[ "$AGENT_NAME" == "vibe" ]]; then
+        echo "Error: --agent host is not supported for Mistral Vibe." >&2
+        echo "Vibe requires its Python environment and cannot be mounted as a standalone binary." >&2
+        echo "Use --agent install instead, or let the script auto-fallback to install mode." >&2
+        exit 1
+    fi
+
     AGENT_BIN=$(readlink -f "$(command -v "$AGENT_NAME")" 2>/dev/null) || true
     if [[ -z "$AGENT_BIN" || ! -f "$AGENT_BIN" ]]; then
         echo "Error: $AGENT_NAME binary not found in PATH." >&2

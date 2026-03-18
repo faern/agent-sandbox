@@ -1,8 +1,7 @@
 # agent-sandbox
 
 Run AI coding agents inside rootless podman containers.
-Supports [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and
-[OpenCode](https://opencode.ai/). Isolates the agent from your system — the host filesystem is not accessible
+Supports [Claude Code](https://docs.anthropic.com/en/docs/claude-code), [OpenCode](https://opencode.ai/), and [Mistral Vibe](https://mistral.ai/products/vibe). Isolates the agent from your system — the host filesystem is not accessible
 except for a small set of controlled mounts. Currently only designed for being used on a Linux host.
 
 The sandbox gets a user with the same username and home dir as on your host. The container
@@ -22,8 +21,7 @@ The container definition is configurable both globally and per project (working 
 
 ## How it works
 
-`agent-sandbox` is a single script. It is invoked via symlinks named `claude-sandbox` and
-`opencode-sandbox`. The script detects which agent to use based on the name it was invoked as.
+`agent-sandbox` is a single script. It is invoked via symlinks named `claude-sandbox`, `opencode-sandbox`, and `vibe-sandbox`. The script detects which agent to use based on the name it was invoked as.
 Each agent gets its own config paths, environment variables, and install method.
 
 ## Sandbox boundary
@@ -64,9 +62,9 @@ By default the host's agent binary is bind-mounted into the container. This keep
 image small and lets you get updates without rebuilding. This is configurable with `--agent`:
 
 - `--agent host` (default) — Mount the host binary read-only. If the binary is not found
-  on the host, falls back to `install` automatically.
+  on the host, falls back to `install` automatically. **Note: Not supported for Mistral Vibe.**
 - `--agent install` — Install the agent into the container image during build
-  (runs the agent's official install script as the sandbox user).
+  (runs the agent's official install script as the sandbox user). **Required for Mistral Vibe.**
 - `--agent none` — Don't provide the agent at all. Use this when your custom
   containerfile installs it.
 
@@ -84,12 +82,13 @@ This is just a standalone bash script. Copy or symlink it somewhere in your PATH
 cp agent-sandbox ~/.local/bin/
 ln -s agent-sandbox ~/.local/bin/claude-sandbox
 ln -s agent-sandbox ~/.local/bin/opencode-sandbox
+ln -s agent-sandbox ~/.local/bin/vibe-sandbox
 ```
 
 ## Usage
 
-Invoke as `claude-sandbox` or `opencode-sandbox`. All examples below use `claude-sandbox`
-but `opencode-sandbox` works identically.
+Invoke as `claude-sandbox`, `opencode-sandbox`, or `vibe-sandbox`. All examples below use `claude-sandbox`
+but `opencode-sandbox` and `vibe-sandbox` work identically.
 
 ```sh
 # Start the agent in the sandbox, with the current working directory
@@ -124,6 +123,9 @@ claude-sandbox --agent install
 
 # Skip host binary mount (use when containerfile installs the agent)
 claude-sandbox --agent none
+
+# Note: Mistral Vibe requires --agent install as it cannot be mounted from host
+vibe-sandbox --agent install
 
 # Work in a git worktree for a specific branch
 claude-sandbox --worktree feature-branch
