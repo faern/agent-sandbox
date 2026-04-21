@@ -204,7 +204,7 @@ Options:
   --shell       Start an interactive shell instead of the agent
   --read-only   Mount project dir read-only
   --stateless   No project dir, ephemeral container
-  --rebuild     Force image rebuild
+  --rebuild     Force full image rebuild (--no-cache, re-pull base image)
   -c, --cleanup List/remove old sandbox images
   -v, --verbose Print debug info (config sources, image tag, rebuild reason)
   --agent host|install|none
@@ -693,10 +693,13 @@ if needs_rebuild; then
     echo "Building sandbox image ($IMAGE_TAG)..."
     verbose "Generated Containerfile:\n$GENERATED_CONTAINERFILE"
     EMPTY_CTX=$(mktemp -d "${XDG_RUNTIME_DIR:-/tmp}/${SANDBOX_NAME}-ctx-XXXXXX")
-    echo "$GENERATED_CONTAINERFILE" | podman build \
-        -t "$IMAGE_TAG" \
-        -f - \
-        "$EMPTY_CTX"
+    BUILD_ARGS=(-t "$IMAGE_TAG" -f -)
+    # --rebuild forces a full rebuild from scratch, bypassing the layer cache
+    # and re-pulling the base image.
+    if [[ $OPT_REBUILD -eq 1 ]]; then
+        BUILD_ARGS+=(--no-cache --pull=always)
+    fi
+    echo "$GENERATED_CONTAINERFILE" | podman build "${BUILD_ARGS[@]}" "$EMPTY_CTX"
     rm -rf "$EMPTY_CTX"
 fi
 
