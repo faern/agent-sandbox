@@ -388,10 +388,15 @@ generate_containerfile() {
     local user_gid
     user_gid=$(id -g)
     local user_home="$HOME"
+    local extra_dirs
+    extra_dirs=$(containerfile_extra_dirs)
 
-    # Injected right after the first FROM line: ARG declarations + user creation.
-    # Placing ARGs after FROM makes them available to preamble commands directly
-    # (pre-FROM ARGs are only usable in FROM instructions themselves).
+    # Injected right after the first FROM line: ARG declarations, user creation,
+    # and user-local directory setup. Placing ARGs after FROM makes them
+    # available to preamble commands directly (pre-FROM ARGs are only usable in
+    # FROM instructions themselves). Directories and PATH are set up here
+    # (before the user's containerfile RUN steps) so install scripts that drop
+    # binaries in ~/.local/bin and then verify with \`command -v\` just work.
     local post_from_block
     post_from_block=$(cat <<POSTFROM_EOF
 
@@ -408,7 +413,18 @@ RUN existing_user=\$(awk -F: '\$3 == "${user_uid}" {print \$1}' /etc/passwd) \\
     ; groupadd --gid ${user_gid} ${username} \\
     && useradd --uid ${user_uid} --gid ${user_gid} --home-dir ${user_home} -m ${username}
 
+# Pre-create user-local dirs with correct ownership so user containerfile RUNs
+# (and bind mounts at runtime) find them ready.
+# Parents (.local, .config) are listed explicitly: install -d running as root
+# only applies -o/-g to the named targets, not to parents it has to create.
+RUN install -d -o ${user_uid} -g ${user_gid} -m 0755 \\
+    ${user_home}/.local \\
+    ${user_home}/.local/bin \\
+    ${user_home}/.local/share \\
+    ${user_home}/.config${extra_dirs}
+
 ENV EDITOR=vim
+ENV PATH="${user_home}/.local/bin:\${PATH}"
 POSTFROM_EOF
     )
 
@@ -465,9 +481,6 @@ RUN uv pip install --system pymupdf pdfplumber
 PREAMBLE_EOF
     fi
 
-    local extra_dirs
-    extra_dirs=$(containerfile_extra_dirs)
-
     # --- Always appended (distro-agnostic) ---
     cat <<SUFFIX_EOF
 
@@ -482,10 +495,6 @@ RUN if command -v sudo >/dev/null 2>&1; then \\
 
 # Become the user, instead of root
 USER ${username}
-
-RUN mkdir -p ${user_home}/.local/bin ${user_home}/.local/share${extra_dirs}
-ENV PATH="${user_home}/.local/bin:\${PATH}"
-
 SUFFIX_EOF
 
     if [[ "$OPT_AGENT_SOURCE" == "install" ]]; then

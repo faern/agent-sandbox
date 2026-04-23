@@ -167,10 +167,12 @@ The resulting build order is:
 ─── Your FROM line ───────────────────────────────────────────
 INJECTED: ARG USERNAME, USER_HOME, USER_UID, USER_GID
 INJECTED: User creation (matching host UID/GID)
+INJECTED: mkdir ~/.local, ~/.local/{bin,share}, ~/.config (owned by user)
+INJECTED: ENV PATH (prepends ${USER_HOME}/.local/bin)
 ─── Rest of your containerfile ───────────────────────────────
 INJECTED: USER root (reset after your containerfile)
 INJECTED: Sudo setup (if sudo is installed)
-INJECTED: USER ${USERNAME}, mkdir, PATH setup
+INJECTED: USER ${USERNAME}
 INJECTED: Agent install (only with --agent install)
 ```
 
