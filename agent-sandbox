@@ -213,6 +213,13 @@ Options:
                 install: Install $AGENT_NAME into container during image build.
                 none:    Don't provide $AGENT_NAME at all. You are expected to
                          install it via the containerfile
+  --volume PATH[:ro|:rw]
+                Mount an additional host path into the sandbox at the same
+                absolute path. Relative paths resolve against the current
+                working directory at the time the flag is parsed. The path
+                must exist on the host. Default mode is rw. Repeatable.
+                Examples: --volume ../sibling-repo
+                          --volume /shared/data:ro
   --podman-arg ARG
                 Pass an arbitrary argument to podman run (repeatable).
                 Each invocation adds one argv element.
@@ -283,6 +290,7 @@ OPT_GIT=""
 OPT_WORKTREE_BRANCH=""
 AGENT_ARGS=()
 PODMAN_ARGS=()
+OPT_VOLUMES=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -316,12 +324,33 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --podman-arg) PODMAN_ARGS+=("$2"); shift 2 ;;
+        --volume)
+            vol_arg="${2:?Error: --volume requires a path}"
+            shift 2
+            case "$vol_arg" in
+                *:ro) vol_path="${vol_arg%:ro}"; vol_mode="ro" ;;
+                *:rw) vol_path="${vol_arg%:rw}"; vol_mode="rw" ;;
+                *:*)
+                    echo "Error: --volume mode must be ro or rw (got '${vol_arg##*:}')" >&2
+                    exit 1
+                    ;;
+                *)    vol_path="$vol_arg"; vol_mode="rw" ;;
+            esac
+            # Resolve relative to current $PWD now, before any --worktree cd,
+            # so the user's typed-in relative path is interpreted as expected.
+            if ! vol_resolved=$(realpath -e -- "$vol_path" 2>/dev/null); then
+                echo "Error: --volume path does not exist: $vol_path" >&2
+                exit 1
+            fi
+            OPT_VOLUMES+=("$vol_resolved:$vol_mode")
+            unset vol_arg vol_path vol_mode vol_resolved
+            ;;
         --)           shift; AGENT_ARGS+=("$@"); break ;;
         *)            echo "Unknown option: $1" >&2; echo "Use -- to pass arguments to $AGENT_NAME." >&2; exit 1 ;;
     esac
 done
 readonly OPT_READ_ONLY OPT_STATELESS OPT_REBUILD OPT_CLEANUP OPT_VERBOSE OPT_SHELL OPT_GITCONFIG OPT_KVM OPT_AGENT_EXPLICIT OPT_WORKTREE_BRANCH
-readonly AGENT_ARGS PODMAN_ARGS
+readonly AGENT_ARGS PODMAN_ARGS OPT_VOLUMES
 
 verbose() { [[ $OPT_VERBOSE -eq 1 ]] && echo -e "${COLOR_VERBOSE}[#] $*${COLOR_RESET}" >&2 || true; }
 
@@ -553,6 +582,16 @@ build_mounts() {
     if [[ $OPT_GITCONFIG -eq 1 && -f "$SANDBOX_DIR/.gitconfig" ]]; then
         RUN_ARGS+=(-v "$SANDBOX_DIR/.gitconfig:$HOME/.gitconfig:ro,z")
     fi
+
+    # User-provided extra mounts (--volume). Paths were already resolved to
+    # canonical absolute form at arg-parse time; entries are "PATH:MODE".
+    local vol path mode
+    for vol in "${OPT_VOLUMES[@]}"; do
+        path="${vol%:*}"
+        mode="${vol##*:}"
+        verbose "Custom volume: $path (mode=$mode)"
+        RUN_ARGS+=(-v "$path:$path:${mode},z")
+    done
 }
 
 # ===========================================================================

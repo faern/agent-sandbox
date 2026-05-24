@@ -38,6 +38,7 @@ filesystem beyond a controlled set of mounts:
 | Repository `.git` dir | read-write | Controlled by `--git`. Default `rw` (`ro` with `--read-only`, omitted with `--stateless` or `--git none`). At repo root, `.git` is inside the project mount. |
 | Claude project conversations | read-write | `~/.claude/projects/<project>/` mounted directly from host so conversations persist across sessions. Omitted with `--stateless`. |
 | Claude credentials | read-write | `~/.claude/.credentials.json` mounted directly from host so OAuth token refreshes persist. |
+| Extra host paths (`--volume`) | read-write | Opt-in. Mounted at the same absolute path inside the container. `:ro` for read-only. Repeatable. |
 
 Agent config files are copied into an ephemeral directory per session:
 
@@ -110,9 +111,15 @@ claude-sandbox --shell
 # Pass args to the agent after a double dash (--)
 claude-sandbox -- --model sonnet -p "explain this repo"
 
+# Mount extra host directories at the same path inside the container.
+# Relative paths resolve against $PWD. Repeatable. Add :ro for read-only.
+claude-sandbox --volume ../sibling-repo
+claude-sandbox --volume /shared/data:ro --volume ~/notes
+
 # Pass extra arguments to podman run
 claude-sandbox --podman-arg --network=host
 claude-sandbox --podman-arg --cap-add=NET_RAW
+# For mounts where host and container paths differ, use --podman-arg directly:
 claude-sandbox --podman-arg --volume=/host/path:/sandbox/path:ro
 
 # List and remove old images
