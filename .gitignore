@@ -1,0 +1,13 @@
+# Local Claude Code project state (settings, conversations, etc.)
+.claude/
+
+# Git worktrees created by `agent-sandbox --worktree`
+.worktrees/
+
+# Personal notes
+TODO.md
+
+# Personal scratch / example dirs
+example2/
+examples/
+my-batteries-included-container/
