@@ -57,6 +57,18 @@ Additional hardening:
 - Host processes are hidden (`hidepid=2`)
 - The script warns and prompts for confirmation if run from `$HOME` or outside `$HOME`
 
+### SELinux labels
+
+On SELinux hosts the container runs with `--security-opt label=disable`, so SELinux
+type-enforcement is not applied to the bind mounts. This is deliberate: with podman's
+`:z` relabeling, only files present at container start get a label the container can
+read. Files added to a mount mid-session keep their original host label (`mv`, `cp -a`,
+and `rsync` all preserve it), and a confined container then cannot read them. Disabling
+labels lets the agent read anything dropped into a mount by any method, and avoids
+mutating host SELinux labels. Isolation still rests on rootless execution, the user
+namespace, and the limited set of bind mounts - SELinux was only ever a defense-in-depth
+layer on top of those. No effect on hosts without SELinux.
+
 ## Agent binary
 
 By default the host's agent binary is bind-mounted into the container. This keeps the container

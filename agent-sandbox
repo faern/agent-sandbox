@@ -129,12 +129,12 @@ prepare_agent_config() {
 build_agent_mounts() {
     case "$AGENT_NAME" in
         claude)
-            RUN_ARGS+=(-v "$SANDBOX_DIR/claude.json:$HOME/.claude.json:rw,z")
-            RUN_ARGS+=(-v "$SANDBOX_DIR/.claude:$HOME/.claude:rw,z")
+            RUN_ARGS+=(-v "$SANDBOX_DIR/claude.json:$HOME/.claude.json:rw")
+            RUN_ARGS+=(-v "$SANDBOX_DIR/.claude:$HOME/.claude:rw")
             # Mount credentials directly from host so OAuth token refreshes persist
             local creds="$HOME/.claude/.credentials.json"
             [[ -f "$creds" ]] || touch "$creds"
-            RUN_ARGS+=(-v "$creds:$creds:rw,z")
+            RUN_ARGS+=(-v "$creds:$creds:rw")
             # Mount project conversation dir directly from host so conversations
             # persist across sessions
             if [[ $OPT_STATELESS -eq 0 ]]; then
@@ -142,17 +142,17 @@ build_agent_mounts() {
                 project_dir_name=$(claude_project_dir_name "$PWD")
                 local host_project_dir="$HOME/.claude/projects/$project_dir_name"
                 mkdir -p "$host_project_dir"
-                RUN_ARGS+=(-v "$host_project_dir:$host_project_dir:rw,z")
+                RUN_ARGS+=(-v "$host_project_dir:$host_project_dir:rw")
             fi
             ;;
         opencode)
-            RUN_ARGS+=(-v "$SANDBOX_DIR/config-opencode:$XDG_CONFIG_HOME/opencode:rw,z")
-            RUN_ARGS+=(-v "$SANDBOX_DIR/share-opencode:$HOME/.local/share/opencode:rw,z")
+            RUN_ARGS+=(-v "$SANDBOX_DIR/config-opencode:$XDG_CONFIG_HOME/opencode:rw")
+            RUN_ARGS+=(-v "$SANDBOX_DIR/share-opencode:$HOME/.local/share/opencode:rw")
             ;;
         vibe)
-            RUN_ARGS+=(-v "$SANDBOX_DIR/.vibe:$HOME/.vibe:rw,z")
+            RUN_ARGS+=(-v "$SANDBOX_DIR/.vibe:$HOME/.vibe:rw")
             if [[ -d "$SANDBOX_DIR/config-vibe" ]]; then
-                RUN_ARGS+=(-v "$SANDBOX_DIR/config-vibe:$XDG_CONFIG_HOME/vibe:rw,z")
+                RUN_ARGS+=(-v "$SANDBOX_DIR/config-vibe:$XDG_CONFIG_HOME/vibe:rw")
             fi
             ;;
     esac
@@ -560,13 +560,13 @@ build_mounts() {
     if [[ $OPT_STATELESS -eq 0 ]]; then
         local mount_mode="rw"
         [[ $OPT_READ_ONLY -eq 1 ]] && mount_mode="ro"
-        RUN_ARGS+=(-v "$PWD:$PWD:${mount_mode},z")
+        RUN_ARGS+=(-v "$PWD:$PWD:${mount_mode}")
 
         # Mount .git if requested and available, but only when it is
         # outside the project mount (otherwise the project mount covers it).
         if [[ "$OPT_GIT" != "none" && -n "$REPO_ROOT" && "$REPO_ROOT" != "$PWD" ]]; then
             verbose "Mounting git repo root $REPO_ROOT"
-            RUN_ARGS+=(-v "$REPO_ROOT/.git:$REPO_ROOT/.git:${OPT_GIT},z")
+            RUN_ARGS+=(-v "$REPO_ROOT/.git:$REPO_ROOT/.git:${OPT_GIT}")
             # The project bind mount creates a filesystem boundary that
             # prevents git from discovering .git in a parent directory.
             RUN_ARGS+=(-e GIT_DISCOVERY_ACROSS_FILESYSTEM=1)
@@ -580,7 +580,7 @@ build_mounts() {
 
     # Mount gitconfig read-only so git has the right user name, email, aliases, etc.
     if [[ $OPT_GITCONFIG -eq 1 && -f "$SANDBOX_DIR/.gitconfig" ]]; then
-        RUN_ARGS+=(-v "$SANDBOX_DIR/.gitconfig:$HOME/.gitconfig:ro,z")
+        RUN_ARGS+=(-v "$SANDBOX_DIR/.gitconfig:$HOME/.gitconfig:ro")
     fi
 
     # User-provided extra mounts (--volume). Paths were already resolved to
@@ -590,7 +590,7 @@ build_mounts() {
         path="${vol%:*}"
         mode="${vol##*:}"
         verbose "Custom volume: $path (mode=$mode)"
-        RUN_ARGS+=(-v "$path:$path:${mode},z")
+        RUN_ARGS+=(-v "$path:$path:${mode}")
     done
 }
 
@@ -783,6 +783,14 @@ RUN_ARGS=(
     --security-opt mask=/proc/kcore:/proc/kallsyms:/proc/config.gz:/proc/sched_debug:/proc/timer_list:/proc/self/mountinfo:/proc/1/mountinfo
     # Hide other users' processes in /proc
     --security-opt proc-opts=hidepid=2
+    # Disable SELinux label enforcement on mounts. Without this, podman's ":z"
+    # relabeling only fixes files that exist at container start; files added to
+    # a mount mid-session keep their host label (mv/cp -a/rsync preserve it) and
+    # the confined container can't read them. Disabling labels lets the agent
+    # read anything dropped into a mount by any method, and avoids mutating host
+    # SELinux labels. Isolation still rests on rootless + userns + the limited
+    # set of bind mounts. No-op on hosts without SELinux.
+    --security-opt label=disable
     "${PODMAN_ARGS[@]}"
 )
 
@@ -839,7 +847,7 @@ if [[ "$OPT_AGENT_SOURCE" == "host" ]]; then
         exit 1
     fi
     verbose "$AGENT_DISPLAY_NAME binary: $AGENT_BIN"
-    RUN_ARGS+=(-v "$AGENT_BIN:$HOME/.local/bin/$AGENT_NAME:ro,z")
+    RUN_ARGS+=(-v "$AGENT_BIN:$HOME/.local/bin/$AGENT_NAME:ro")
 fi
 
 ENTRY_CMD="$AGENT_NAME"
